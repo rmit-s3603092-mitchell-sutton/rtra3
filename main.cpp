@@ -1,8 +1,3 @@
-/*
- *  VBO-cube.c
- *  This program demonstrates VBOs for a cube.
- *  $Id: VBO-cube.c,v 1.4 2014/07/28 02:03:24 gl Exp gl $
- */
 
 #define DEBUG
 #define GL_GLEXT_PROTOTYPES
@@ -16,6 +11,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <math.h>
+#include "shaders.h"
 
 #if _WIN32
 #	include <Windows.h>
@@ -31,12 +27,17 @@
 #	include <GL/glut.h>
 #endif
 
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/constants.hpp>
 /* *********************** Global Variables *********************** */
 
 typedef struct
 {
 	bool animate;
-	float t, lastT, dt;
+	float t, lastT;
 	bool levelOpenVisual;
 } Global;
 
@@ -54,11 +55,13 @@ typedef struct { float x, y, z; } vec3f;//3D vector
 
 
 
-Global g = {false, 0.0, 0.0, 0.0, false};
+Global g = {false, 0.0, 0.0, true};
 
 const float milli = 1000.0;
 float levelOpenTimer = 0.0;
-
+GLfloat openLevelShader = 0;
+glm::mat4 modelViewMatrix;
+glm::mat3 normalMatrix;
 
 bool useBufferObjects = false;
 
@@ -207,6 +210,7 @@ void init(void)
 	glClearColor(0.0, 0.0, 0.0, 0.0);
 	glShadeModel(GL_FLAT);
 	glEnable(GL_DEPTH_TEST);
+	openLevelShader = getShader("openLevel.vs","openLevel.fs");
 	generateBuffers();
 	enableVertexArrays();
 	bufferData();
@@ -215,27 +219,44 @@ void init(void)
 
 
 void visuallyOpenNewLevel(){
+	glUseProgram(openLevelShader);
 	if(!levelOpenTimer)
 		levelOpenTimer = g.t;
 	//**** some cool shader stuff i have in mind
 
-
-
-
-/// it should be cool lol
 	
+	glutSolidSphere(0.8*(g.t - levelOpenTimer),200,200);
+	glutSolidSphere(0.8*(g.t - levelOpenTimer),200,200);
+	glutSolidSphere(0.8*(g.t - levelOpenTimer),200,200);
+
 	
 
-
-
-
-	if(g.t - levelOpenTimer>5){
+	if(g.t - levelOpenTimer > 5){
 		levelOpenTimer = 0.0;
 		g.levelOpenVisual = false;
 	}
+	glUseProgram(0);
 	
 }
+void idle()
+{
+	
+	float t, dt;
+	
+	t = glutGet(GLUT_ELAPSED_TIME) / milli;
+	
+	// Accumulate time if animation enabled
+	if (g.animate) {
+		dt = t - g.lastT;
+		g.t += dt;
 
+		g.lastT = t;
+	}
+	
+	glutPostRedisplay();
+
+	
+}
 void display(void)
 {
 #ifdef DEBUG
@@ -252,7 +273,23 @@ void display(void)
 
 	//glRotatef(-30.0, 0.0, 1.0, 0.0);
 	glScalef(0.5, 0.5, 0.5);
+	//idle();
+	glUseProgram(openLevelShader);
+	modelViewMatrix = glm::mat4(1.0);
+	normalMatrix = glm::mat3(1.0);
 	
+	modelViewMatrix = glm::rotate(modelViewMatrix, camera.rotateX * glm::pi<float>() / 180.0f, glm::vec3(1.0, 0.0, 0.0));
+	modelViewMatrix = glm::rotate(modelViewMatrix, camera.rotateY * glm::pi<float>() / 180.0f, glm::vec3(0.0, 1.0, 0.0));
+	modelViewMatrix = glm::scale(modelViewMatrix, glm::vec3(camera.scale));
+	
+	normalMatrix = glm::transpose(glm::inverse(glm::mat3(modelViewMatrix)));
+	GLfloat normalMat = glGetUniformLocation(openLevelShader, "normalMatrix");
+	GLfloat modelMat = glGetUniformLocation(openLevelShader, "modelViewMatrix");
+	GLfloat theG = glGetUniformLocation(openLevelShader, "time");
+	glUniformMatrix3fv(normalMat,1,false,&normalMatrix[0][0]);
+	glUniformMatrix4fv(modelMat,1,false,&modelViewMatrix[0][0]);
+	glUniform1f(theG,g.t);
+	glUseProgram(0);
 	if(g.levelOpenVisual) visuallyOpenNewLevel();
 
 	bufferData();
@@ -263,25 +300,7 @@ void display(void)
 	glutSwapBuffers();
 }
 
-void idle()
-{
-	
-	float t, dt;
-	
-	t = glutGet(GLUT_ELAPSED_TIME) / milli;
-	
-	// Accumulate time if animation enabled
-	if (g.animate) {
-		dt = t - g.lastT;
-		g.t += dt;
-		g.dt = dt;
-		g.lastT = t;
-	}
-	
-	glutPostRedisplay();
 
-	
-}
 
 void reshape (int w, int h)
 {
@@ -356,6 +375,9 @@ void keyboard(unsigned char key, int x, int y)
 		case 's':
 			glShadeModel(GL_SMOOTH);
 			glutPostRedisplay();
+			break;
+		case 'a':
+			g.animate = !g.animate;
 			break;
 		case 32:
 			printf("Aye got here \n");
