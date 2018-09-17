@@ -36,7 +36,8 @@
 typedef struct
 {
 	bool animate;
-	float t, lastT;
+	float t, lastT, dt;
+	bool levelOpenVisual;
 } Global;
 
 typedef enum { inactive, rotate, pan, zoom } CameraControl;
@@ -53,10 +54,10 @@ typedef struct { float x, y, z; } vec3f;//3D vector
 
 
 
-Global g = {false, 0.0, 0.0};
+Global g = {false, 0.0, 0.0, 0.0, false};
 
 const float milli = 1000.0;
-
+float levelOpenTimer = 0.0;
 
 
 bool useBufferObjects = false;
@@ -212,6 +213,29 @@ void init(void)
 	unBindBuffers();
 }
 
+
+void visuallyOpenNewLevel(){
+	if(!levelOpenTimer)
+		levelOpenTimer = g.t;
+	//**** some cool shader stuff i have in mind
+
+
+
+
+/// it should be cool lol
+	
+	
+
+
+
+
+	if(g.t - levelOpenTimer>5){
+		levelOpenTimer = 0.0;
+		g.levelOpenVisual = false;
+	}
+	
+}
+
 void display(void)
 {
 #ifdef DEBUG
@@ -229,6 +253,7 @@ void display(void)
 	//glRotatef(-30.0, 0.0, 1.0, 0.0);
 	glScalef(0.5, 0.5, 0.5);
 	
+	if(g.levelOpenVisual) visuallyOpenNewLevel();
 
 	bufferData();
 	renderVBO();
@@ -249,6 +274,7 @@ void idle()
 	if (g.animate) {
 		dt = t - g.lastT;
 		g.t += dt;
+		g.dt = dt;
 		g.lastT = t;
 	}
 	
