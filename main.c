@@ -6,12 +6,16 @@
 
 #define DEBUG
 #define GL_GLEXT_PROTOTYPES
+#define GL_GLEXT_PROTOTYPES
+#define VERTICES 0
+#define COLORS 2
+#define INDICES 4
+#define NUM_BUFFERS 5
+#define SPACEBAR 32
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <math.h>
-
-#define GL_GLEXT_PROTOTYPES
 
 #if _WIN32
 #	include <Windows.h>
@@ -34,6 +38,21 @@ typedef struct
 	bool animate;
 	float t, lastT;
 } Global;
+
+typedef enum { inactive, rotate, pan, zoom } CameraControl;
+
+struct camera_t {
+	int lastX, lastY;
+	float rotateX, rotateY;
+	float scale;
+	CameraControl control;
+} camera = { 0, 0, 30.0, -30.0, 1.0, inactive };
+
+typedef struct { float r, g, b; } color3f;
+typedef struct { float x, y, z; } vec3f;//3D vector
+
+
+
 Global g = {false, 0.0, 0.0};
 
 const float milli = 1000.0;
@@ -42,7 +61,7 @@ const float milli = 1000.0;
 
 bool useBufferObjects = false;
 
-GLfloat vertices[] = {
+float vertices[] = {
 	-1.0, -1.0, -1.0, // 0
 	1.0, -1.0, -1.0, // 1
 	1.0,  1.0, -1.0, // 2
@@ -53,7 +72,7 @@ GLfloat vertices[] = {
 	-1.0,  1.0,  1.0  // 7
 };
 
-GLfloat colors[] = {
+float colors[] = {
 	0.0, 0.0, 0.0, // 0
 	1.0, 0.0, 0.0, // 1
 	0.0, 1.0, 0.0, // 2
@@ -85,11 +104,6 @@ const GLvoid* indicesOffsets[] = {
 };
 
 GLsizei numQuads = 6;
-
-#define VERTICES 0
-#define COLORS 2
-#define INDICES 4
-#define NUM_BUFFERS 5
 
 GLuint buffers[NUM_BUFFERS];
 
@@ -126,6 +140,15 @@ void generateBuffers(void)
 
 void bufferData()
 {
+	//GL_ARRAY_BUFFER for vertex data
+	/*
+	 void glBufferData( GLenum target, GLsizeiptr size,
+	 const GLvoid *data, GLenum usage)
+	 - target again GL ARRAY BUFFER or GL ELEMENT ARRAY BUFFER
+	 - size is number of bytes
+	 - data is pointer to client memory or NULL
+	 - usage is a hint for performance
+	*/
 	
 	glBindBuffer(GL_ARRAY_BUFFER, buffers[VERTICES]);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
@@ -133,6 +156,7 @@ void bufferData()
 	glBindBuffer(GL_ARRAY_BUFFER, buffers[COLORS]);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW);
 	
+	//GL_ELEMENT_ARRAY_BUFFER for index data
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2DArray),
 				 indices2DArray, GL_STATIC_DRAW);
@@ -153,21 +177,28 @@ void unBindBuffers()
 /* *********************** Rendering VBO *********************** */
 
 
-void renderCubeVAVBO()
+void renderVBO()
 {
+	
+	/*
+	 void glVertexPointer(	GLint size,GLenum type,GLsizei stride,const GLvoid * pointer);
+	 
+	 size = num of vertex per coordinate (only 2 as we doing 2D)
+	 type = Data type of each coordinate (0.0) so float
+	 stride = the amount of data between coordinates. Its tightly packed so I made it 0
+	 pointer = pointer to first coordinate (0);
+	 */
+	
+	//We could use pointer to print different things using the same array!!
 
 	glBindBuffer(GL_ARRAY_BUFFER, buffers[VERTICES]);
 	glVertexPointer(3, GL_FLOAT, 0, 0);
 	glBindBuffer(GL_ARRAY_BUFFER, buffers[COLORS]);
 	glColorPointer(3, GL_FLOAT, 0, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES]);
-	
-	
-	
+
 	glMultiDrawElements(GL_QUADS, indicesCounts, GL_UNSIGNED_INT,
 						indicesOffsets, numQuads);
-	
-	
 }
 
 void init(void)
@@ -192,11 +223,15 @@ void display(void)
 	glLoadIdentity();
 	
 	/* Oblique view, scale cube */
-	glRotatef(15.0, 1.0, 0.0, 0.0);
-	glRotatef(-30.0, 0.0, 1.0, 0.0);
-	glScalef(0.5, 0.5, 0.5);
+	glRotatef(camera.rotateX, 1.0, 0.0, 0.0);
+	glRotatef(camera.rotateY, 0.0, 1.0, 0.0);
 
-	renderCubeVAVBO();
+	//glRotatef(-30.0, 0.0, 1.0, 0.0);
+	glScalef(0.5, 0.5, 0.5);
+	
+
+	bufferData();
+	renderVBO();
 	
 	checkForGLerrors(__LINE__);
 	
@@ -217,6 +252,8 @@ void idle()
 		g.lastT = t;
 	}
 	
+	glutPostRedisplay();
+
 	
 }
 
@@ -227,22 +264,52 @@ void reshape (int w, int h)
 
 /* *********************** Inputs *********************** */
 
-void mouse (int button, int state, int x, int y)
+void mouse(int button, int state, int x, int y)
 {
-	switch (button) {
-		case GLUT_LEFT_BUTTON:
-			if (state == GLUT_DOWN) {
-				glutPostRedisplay();
-			}
+	
+	camera.lastX = x;
+	camera.lastY = y;
+	
+	if (state == GLUT_DOWN)
+		switch(button) {
+			case GLUT_LEFT_BUTTON:
+				camera.control = rotate;
+				break;
+			case GLUT_MIDDLE_BUTTON:
+				camera.control = pan;
+				break;
+			case GLUT_RIGHT_BUTTON:
+				camera.control = zoom;
+				break;
+		}
+	else if (state == GLUT_UP)
+		camera.control = inactive;
+}
+
+void motion(int x, int y)
+{
+	float dx, dy;
+	
+	dx = x - camera.lastX;
+	dy = y - camera.lastY;
+	camera.lastX = x;
+	camera.lastY = y;
+	
+	switch (camera.control) {
+		case inactive:
 			break;
-		case GLUT_RIGHT_BUTTON:
-			if (state == GLUT_DOWN) {
-				glutPostRedisplay();
-			}
+		case rotate:
+			camera.rotateX += dy;
+			camera.rotateY += dx;
 			break;
-		default:
+		case pan:
+			break;
+		case zoom:
+			camera.scale += dy / 100.0;
 			break;
 	}
+	
+	glutPostRedisplay();
 }
 
 void keyboard(unsigned char key, int x, int y)
@@ -264,6 +331,14 @@ void keyboard(unsigned char key, int x, int y)
 			glShadeModel(GL_SMOOTH);
 			glutPostRedisplay();
 			break;
+		case 32:
+			printf("Aye got here \n");
+			for (int i = 0; i<32; i++){
+				//if(i%3 == 0){
+					vertices[i] += 0.05;
+				//}
+			}
+			break;
 		case 27:
 			exit(0);
 			break;
@@ -283,7 +358,9 @@ int main(int argc, char** argv)
 	init();
 	glutDisplayFunc(display);
 	glutReshapeFunc(reshape);
+	glutIdleFunc(idle);
 	glutMouseFunc(mouse);
+	glutMotionFunc(motion);
 	glutKeyboardFunc(keyboard);
 	glutMainLoop();
 	return 0;
