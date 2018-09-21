@@ -39,6 +39,7 @@ typedef struct
 	bool animate;
 	float t, lastT;
 	bool levelOpenVisual;
+	bool levelDevel;
 } Global;
 
 typedef enum { inactive, rotate, pan, zoom } CameraControl;
@@ -55,15 +56,17 @@ typedef struct { float x, y, z; } vec3f;//3D vector
 
 
 
-Global g = {false, 0.0, 0.0, true};
-
+Global g = {false, 0.0, 0.0, true, true};
+int levels[9][225]= {{0}};
+int newLevel[1][225] = {{0}};
 const float milli = 1000.0;
 float levelOpenTimer = 0.0;
 GLfloat openLevelShader = 0;
 glm::mat4 modelViewMatrix;
 glm::mat3 normalMatrix;
-
+int levelCount = 1;
 bool useBufferObjects = false;
+int cursorPos[2] = {0,0};
 
 float vertices[] = {
 	-1.0, -1.0, -1.0, // 0
@@ -205,12 +208,65 @@ void renderVBO()
 						indicesOffsets, numQuads);
 }
 
+
+////////////////////* This needs to become VBO! */////////////////////////
+void renderSquare(float size, float x, float y){
+
+	glBegin(GL_POLYGON);
+	glVertex3f(x,y,0.0);
+	glVertex3f(x+size/15.0,y,0.0);
+	glVertex3f(x+size/15.0,y+size/15.0,0.0);
+	glVertex3f(x,y+size/15.0,0.0);
+	glEnd();
+
+}
+//////////////////////////////////////////////////////////////////////////
+
+
+void loadLevels(){
+	for(int i = 0; i < levelCount; i++){
+
+		FILE *fp;
+		char fileString[300];
+		snprintf(fileString, sizeof fileString, "levels/level%d", i);
+		strcat(fileString,".txt");
+		fp = fopen(fileString,"r");
+		int j = 0;
+		int x;
+
+		while(( x = fgetc( fp ) ) != EOF ){
+			if(x==49)levels[i][j] = 1;
+			j++;
+		}
+			printf("\n");
+
+	}
+
+}
+
+
+void renderGrid(float size, float x, float y, int level){
+
+	for(int i = 0; i < 225; i++){
+
+		if(levels[level][i]){
+			renderSquare(size,x+(i%15)/(15.0/size),y+floor(i/15.0)/(15.0/size));
+		}
+	}
+
+
+
+
+}
+
+
 void init(void)
 {
 	glClearColor(0.0, 0.0, 0.0, 0.0);
 	glShadeModel(GL_FLAT);
 	glEnable(GL_DEPTH_TEST);
 	openLevelShader = getShader("openLevel.vs","openLevel.fs");
+	loadLevels();
 	generateBuffers();
 	enableVertexArrays();
 	bufferData();
@@ -226,8 +282,7 @@ void visuallyOpenNewLevel(){
 
 	
 	glutSolidSphere(0.8*(g.t - levelOpenTimer),200,200);
-	glutSolidSphere(0.8*(g.t - levelOpenTimer),200,200);
-	glutSolidSphere(0.8*(g.t - levelOpenTimer),200,200);
+
 
 	
 
@@ -257,23 +312,7 @@ void idle()
 
 	
 }
-void display(void)
-{
-#ifdef DEBUG
-	
-#endif
-	
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	
-	glLoadIdentity();
-	
-	/* Oblique view, scale cube */
-	glRotatef(camera.rotateX, 1.0, 0.0, 0.0);
-	glRotatef(camera.rotateY, 0.0, 1.0, 0.0);
-
-	//glRotatef(-30.0, 0.0, 1.0, 0.0);
-	glScalef(0.5, 0.5, 0.5);
-	//idle();
+void shaderDisplayOpenVisual(){
 	glUseProgram(openLevelShader);
 	modelViewMatrix = glm::mat4(1.0);
 	normalMatrix = glm::mat3(1.0);
@@ -290,11 +329,95 @@ void display(void)
 	glUniformMatrix4fv(modelMat,1,false,&modelViewMatrix[0][0]);
 	glUniform1f(theG,g.t);
 	glUseProgram(0);
-	if(g.levelOpenVisual) visuallyOpenNewLevel();
+	visuallyOpenNewLevel();
 
-	bufferData();
-	renderVBO();
+}
+void renderGridLines(){
 	
+	glBegin(GL_LINES);
+	for(int i = 0; i < 15; i++){
+		glVertex2f(0,i/15.0);
+		glVertex2f(1,i/15.0);
+		glVertex2f(i/15.0,0);
+		glVertex2f(i/15.0,1);
+
+	}
+	glEnd();
+
+}
+void highLight(){
+	float x = cursorPos[0];
+	float y = cursorPos[1];
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+	glLineWidth(3);
+	glColor3f(1.0,0.0,0.0);
+	glLineWidth(1.0);
+	glBegin(GL_POLYGON);
+	glVertex3f(x/15.0+0.01,y/15.0+0.01,0.01);
+	glVertex3f((x+1)/15.0-0.01, y/15.0+0.01,0.01);
+	glVertex3f((x+1)/15.0-0.01, (y+1)/15.0-0.01,0.01);
+	glVertex3f(x/15.0+0.01, (y+1)/15.0-0.01,0.01);
+
+	glEnd();
+
+
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	glColor3f(1.0,1.0,1.0);
+}
+
+void levelDeveloperDisplay(){
+	renderGridLines();
+	renderGrid(1.0,0,0,levelCount);
+	highLight();
+}
+
+void saveLevel(){
+
+
+
+	FILE *fp;
+	char fileString[300];
+	snprintf(fileString, sizeof fileString, "levels/level%d", levelCount);
+	strcat(fileString,".txt");
+	fp = fopen(fileString,"wb");
+	for(int i =0; i <225; ++i){
+		int curr = levels[levelCount][i];
+		fprintf(fp, "%d",curr);
+	}
+	fclose(fp);
+	levelCount++;
+	g.levelDevel = false;
+
+
+
+}	
+void display(void)
+{
+#ifdef DEBUG
+	
+#endif
+	
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	
+	glLoadIdentity();
+	
+	/* Oblique view, scale cube */
+	glRotatef(camera.rotateX, 1.0, 0.0, 0.0);
+	glRotatef(camera.rotateY, 0.0, 1.0, 0.0);
+
+	glRotatef(-30.0, 0.0, 1.0, 0.0);
+	glScalef(0.5, 0.5, 0.5);
+	if(g.levelOpenVisual)
+		shaderDisplayOpenVisual();
+		
+	if(g.levelDevel)
+		levelDeveloperDisplay();
+	else{
+		bufferData();
+		renderVBO();
+		//renderGrid(1.0,0,0,0);
+	}
 	checkForGLerrors(__LINE__);
 	
 	glutSwapBuffers();
@@ -357,6 +480,28 @@ void motion(int x, int y)
 	glutPostRedisplay();
 }
 
+void SpecialInput(int key, int x, int y){
+	switch(key){
+
+		case GLUT_KEY_UP:
+			if(cursorPos[1] - 1 >= 0) cursorPos[1]--;
+			break;	
+		case GLUT_KEY_DOWN:
+			if(cursorPos[1] + 1 < 15) cursorPos[1]++;
+			break;
+		case GLUT_KEY_LEFT:
+			if(cursorPos[0] - 1 >= 0) cursorPos[0]--;
+			break;
+		case GLUT_KEY_RIGHT:
+			if(cursorPos[0] + 1 < 15) cursorPos[0]++;
+			break;
+		default:
+			break;
+	}
+glutPostRedisplay();
+
+}
+
 void keyboard(unsigned char key, int x, int y)
 {
 	switch (key) {
@@ -379,12 +524,22 @@ void keyboard(unsigned char key, int x, int y)
 		case 'a':
 			g.animate = !g.animate;
 			break;
+		case 'w':
+			saveLevel();
+			break;
 		case 32:
 			printf("Aye got here \n");
 			for (int i = 0; i<32; i++){
 				//if(i%3 == 0){
 					vertices[i] += 0.05;
 				//}
+			}
+			if(g.levelDevel){
+				int pos = cursorPos[1]*15+cursorPos[0];
+				if(levels[levelCount][pos] == 1)
+					levels[levelCount][pos] = 0;
+				else
+					levels[levelCount][pos] = 1;
 			}
 			break;
 		case 27:
@@ -400,7 +555,7 @@ int main(int argc, char** argv)
 {
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB | GLUT_DEPTH);
-	glutInitWindowSize(350, 350);
+	glutInitWindowSize(900, 900);
 	glutInitWindowPosition(100, 100);
 	glutCreateWindow(argv[0]);
 	init();
@@ -409,6 +564,7 @@ int main(int argc, char** argv)
 	glutIdleFunc(idle);
 	glutMouseFunc(mouse);
 	glutMotionFunc(motion);
+	glutSpecialFunc(SpecialInput);
 	glutKeyboardFunc(keyboard);
 	glutMainLoop();
 	return 0;

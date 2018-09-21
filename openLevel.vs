@@ -242,7 +242,7 @@ vec4 simplexNoise(vec3 vert){
 	// get a turbulent 3d noise using the normal, normal to high freq
 	  noise = 10.0 *  -.10 * turbulence( .5 * nEC );
 	  // get a 3d noise using the position, low frequency
-	  float b = 5.0 * pnoise( 0.2 * vert * time, vec3( 100.0 ) );
+	  float b = 5.0 * pnoise(0.06 * vert* sin(time*3.141) , vec3( 100.0 ) );
 	  // compose both noises
 	  float displacement = - 0.1 * noise + b;
 
