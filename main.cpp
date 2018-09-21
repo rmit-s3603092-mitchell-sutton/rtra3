@@ -40,6 +40,7 @@ typedef struct
 	float t, lastT;
 	bool levelOpenVisual;
 	bool levelDevel;
+	bool playing;
 } Global;
 
 typedef enum { inactive, rotate, pan, zoom } CameraControl;
@@ -56,7 +57,7 @@ typedef struct { float x, y, z; } vec3f;//3D vector
 
 
 
-Global g = {false, 0.0, 0.0, true, true};
+Global g = {false, 0.0, 0.0, true, false, false};
 int levels[9][225]= {{0}};
 int newLevel[1][225] = {{0}};
 const float milli = 1000.0;
@@ -250,7 +251,7 @@ void renderGrid(float size, float x, float y, int level){
 	for(int i = 0; i < 225; i++){
 
 		if(levels[level][i]){
-			renderSquare(size,x+(i%15)/(7.5/size)-1,y+floor(i/15.0)/(7.5/size)-1);
+			renderSquare(size,x+(i%15)/(7.5/size),y+floor(i/15.0)/(7.5/size));
 		}
 	}
 
@@ -275,10 +276,12 @@ void init(void)
 
 
 void visuallyOpenNewLevel(){
+	float a = (g.t-levelOpenTimer)/3;
+	renderGrid(a,-1*a,-1*a,0);
 	glUseProgram(openLevelShader);
 	if(!levelOpenTimer)
 		levelOpenTimer = g.t;
-	//**** some cool shader stuff i have in mind
+
 
 	
 	glutSolidSphere(0.8*(g.t - levelOpenTimer),200,200);
@@ -286,9 +289,10 @@ void visuallyOpenNewLevel(){
 
 	
 
-	if(g.t - levelOpenTimer > 5){
+	if(g.t - levelOpenTimer > 3){
 		levelOpenTimer = 0.0;
 		g.levelOpenVisual = false;
+		g.playing = true;
 	}
 	glUseProgram(0);
 	
@@ -368,7 +372,7 @@ void highLight(){
 
 void levelDeveloperDisplay(){
 	renderGridLines();
-	renderGrid(1.0,0,0,levelCount);
+	renderGrid(1.0,-1,-1,levelCount);
 	highLight();
 }
 
@@ -403,21 +407,27 @@ void display(void)
 	glLoadIdentity();
 	
 	/* Oblique view, scale cube */
-	glRotatef(camera.rotateX, 1.0, 0.0, 0.0);
+	
+	
+		
+	if(g.levelDevel)
+		levelDeveloperDisplay();
+	else if(g.playing)
+		renderGrid(1.0,-1,-1,0);
+	else if(g.levelOpenVisual)
+		shaderDisplayOpenVisual();
+
+
+	/*
+glRotatef(camera.rotateX, 1.0, 0.0, 0.0);
 	glRotatef(camera.rotateY, 0.0, 1.0, 0.0);
 
 	glRotatef(-30.0, 0.0, 1.0, 0.0);
 	glScalef(0.5, 0.5, 0.5);
-	if(g.levelOpenVisual)
-		shaderDisplayOpenVisual();
-		
-	if(g.levelDevel)
-		levelDeveloperDisplay();
-	else{
 		bufferData();
 		renderVBO();
-		//renderGrid(1.0,0,0,0);
-	}
+	*/
+
 	checkForGLerrors(__LINE__);
 	
 	glutSwapBuffers();
@@ -523,6 +533,9 @@ void keyboard(unsigned char key, int x, int y)
 			break;
 		case 'a':
 			g.animate = !g.animate;
+			break;
+		case 'p':
+			g.levelDevel = true;
 			break;
 		case 'w':
 			saveLevel();
