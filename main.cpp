@@ -214,9 +214,9 @@ void renderSquare(float size, float x, float y){
 
 	glBegin(GL_POLYGON);
 	glVertex3f(x,y,0.0);
-	glVertex3f(x+size/15.0,y,0.0);
-	glVertex3f(x+size/15.0,y+size/15.0,0.0);
-	glVertex3f(x,y+size/15.0,0.0);
+	glVertex3f(x+size/7.5,y,0.0);
+	glVertex3f(x+size/7.5,y+size/7.5,0.0);
+	glVertex3f(x,y+size/7.5,0.0);
 	glEnd();
 
 }
@@ -250,7 +250,7 @@ void renderGrid(float size, float x, float y, int level){
 	for(int i = 0; i < 225; i++){
 
 		if(levels[level][i]){
-			renderSquare(size,x+(i%15)/(15.0/size),y+floor(i/15.0)/(15.0/size));
+			renderSquare(size,x+(i%15)/(7.5/size)-1,y+floor(i/15.0)/(7.5/size)-1);
 		}
 	}
 
@@ -336,10 +336,10 @@ void renderGridLines(){
 	
 	glBegin(GL_LINES);
 	for(int i = 0; i < 15; i++){
-		glVertex2f(0,i/15.0);
-		glVertex2f(1,i/15.0);
-		glVertex2f(i/15.0,0);
-		glVertex2f(i/15.0,1);
+		glVertex2f(-1,i/7.5-1);
+		glVertex2f(1,i/7.5-1);
+		glVertex2f(i/7.5-1,-1);
+		glVertex2f(i/7.5-1,1);
 
 	}
 	glEnd();
@@ -354,10 +354,10 @@ void highLight(){
 	glColor3f(1.0,0.0,0.0);
 	glLineWidth(1.0);
 	glBegin(GL_POLYGON);
-	glVertex3f(x/15.0+0.01,y/15.0+0.01,0.01);
-	glVertex3f((x+1)/15.0-0.01, y/15.0+0.01,0.01);
-	glVertex3f((x+1)/15.0-0.01, (y+1)/15.0-0.01,0.01);
-	glVertex3f(x/15.0+0.01, (y+1)/15.0-0.01,0.01);
+	glVertex3f(x/7.5-1+0.01,y/7.5-1+0.01,-0.01);
+	glVertex3f((x+1)/7.5-1-0.01, y/7.5-1+0.01,-0.01);
+	glVertex3f((x+1)/7.5-1-0.01, (y+1)/7.5-1-0.01,-0.01);
+	glVertex3f(x/7.5-1+0.01, (y+1)/7.5-1-0.01,-0.01);
 
 	glEnd();
 
@@ -484,10 +484,10 @@ void SpecialInput(int key, int x, int y){
 	switch(key){
 
 		case GLUT_KEY_UP:
-			if(cursorPos[1] - 1 >= 0) cursorPos[1]--;
+			if(cursorPos[1] + 1 < 15) cursorPos[1]++;
 			break;	
 		case GLUT_KEY_DOWN:
-			if(cursorPos[1] + 1 < 15) cursorPos[1]++;
+			if(cursorPos[1] - 1 >= 0) cursorPos[1]--;
 			break;
 		case GLUT_KEY_LEFT:
 			if(cursorPos[0] - 1 >= 0) cursorPos[0]--;
