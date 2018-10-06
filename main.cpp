@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <math.h>
 #include "shaders.h"
+#include <unistd.h>
 
 #if _WIN32
 #	include <Windows.h>
@@ -41,6 +42,7 @@ typedef struct
 	bool levelOpenVisual;
 	bool levelDevel;
 	bool playing;
+	bool mainMenu;
 } Global;
 
 typedef enum { inactive, rotate, pan, zoom } CameraControl;
@@ -57,15 +59,18 @@ typedef struct { float x, y, z; } vec3f;//3D vector
 
 
 
-Global g = {false, 0.0, 0.0, true, false, false};
-int levels[9][225]= {{0}};
+Global g = {true, 0.0, 0.0, false, false, false, true};
+int levels[25][225]= {{0}};
 int newLevel[1][225] = {{0}};
 const float milli = 1000.0;
 float levelOpenTimer = 0.0;
+bool isNewLevel = true;
+int scrollAmount = 0;
 GLfloat openLevelShader = 0;
 glm::mat4 modelViewMatrix;
 glm::mat3 normalMatrix;
-int levelCount = 1;
+int levelCount = 0;
+int playingLevel = 1;
 bool useBufferObjects = false;
 int cursorPos[2] = {0,0};
 
@@ -225,21 +230,30 @@ void renderSquare(float size, float x, float y){
 
 
 void loadLevels(){
-	for(int i = 0; i < levelCount; i++){
-
-		FILE *fp;
+	bool allowed = true;
+	int i = 1;
+	while(allowed){
 		char fileString[300];
 		snprintf(fileString, sizeof fileString, "levels/level%d", i);
 		strcat(fileString,".txt");
-		fp = fopen(fileString,"r");
-		int j = 0;
-		int x;
+		if( access( fileString, F_OK ) != -1 ) {
+		    	FILE *fp;
+			fp = fopen(fileString,"r");
+			int j = 0;
+			int x;
 
-		while(( x = fgetc( fp ) ) != EOF ){
-			if(x==49)levels[i][j] = 1;
-			j++;
+			while(( x = fgetc( fp ) ) != EOF ){
+				if(x==49) levels[i][j] = 1;
+				j++;
+			}
+			levelCount++; i++;
+			printf("level%d\n",levelCount);
+ 
+		} else {
+			allowed = false;
 		}
-			printf("\n");
+
+		
 
 	}
 
@@ -277,7 +291,7 @@ void init(void)
 
 void visuallyOpenNewLevel(){
 	float a = (g.t-levelOpenTimer)/3;
-	renderGrid(a,-1*a,-1*a,0);
+	renderGrid(0.85*a,-0.85*a,-0.85*a,playingLevel);
 	glUseProgram(openLevelShader);
 	if(!levelOpenTimer)
 		levelOpenTimer = g.t;
@@ -340,16 +354,16 @@ void renderGridLines(){
 	
 	glBegin(GL_LINES);
 	for(int i = 0; i < 15; i++){
-		glVertex2f(-1,i/7.5-1);
-		glVertex2f(1,i/7.5-1);
-		glVertex2f(i/7.5-1,-1);
-		glVertex2f(i/7.5-1,1);
+		glVertex2f(-0.85,i/(7.5/0.85)-0.85);
+		glVertex2f(0.85,i/(7.5/0.85)-0.85);
+		glVertex2f(i/(7.5/0.85)-0.85,-0.85);
+		glVertex2f(i/(7.5/0.85)-0.85,0.85);
 
 	}
 	glEnd();
 
 }
-void highLight(){
+void levelDevelHighLight(){
 	float x = cursorPos[0];
 	float y = cursorPos[1];
 	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -357,11 +371,13 @@ void highLight(){
 	glLineWidth(3);
 	glColor3f(1.0,0.0,0.0);
 	glLineWidth(1.0);
+
 	glBegin(GL_POLYGON);
-	glVertex3f(x/7.5-1+0.01,y/7.5-1+0.01,-0.01);
-	glVertex3f((x+1)/7.5-1-0.01, y/7.5-1+0.01,-0.01);
-	glVertex3f((x+1)/7.5-1-0.01, (y+1)/7.5-1-0.01,-0.01);
-	glVertex3f(x/7.5-1+0.01, (y+1)/7.5-1-0.01,-0.01);
+
+	glVertex3f(x/(7.5/0.85)-0.85+0.01,y/(7.5/0.85)-0.85+0.01,-0.01);
+	glVertex3f((x+1)/(7.5/0.85)-0.85-0.01, y/(7.5/0.85)-0.85+0.01,-0.01);
+	glVertex3f((x+1)/(7.5/0.85)-0.85-0.01, (y+1)/(7.5/0.85)-0.85-0.01,-0.01);
+	glVertex3f(x/(7.5/0.85)-0.85+0.01, (y+1)/(7.5/0.85)-0.85-0.01,-0.01);
 
 	glEnd();
 
@@ -371,26 +387,65 @@ void highLight(){
 }
 
 void levelDeveloperDisplay(){
+	
 	renderGridLines();
-	renderGrid(1.0,-1,-1,levelCount);
-	highLight();
+	renderGrid(0.85,-0.85,-0.85,levelCount);
+	levelDevelHighLight();
+}
+
+void renderLevelIcons(){
+
+	for(int i = 1; i <= levelCount; i++){
+		renderGrid(0.5,(-1.5+i-scrollAmount),-0.5,i);
+		glLineWidth(3);
+		if(-1.5+i-scrollAmount == -0.5) glColor3f(1.0,0.0,0.0);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		glBegin(GL_POLYGON);
+
+		glVertex2f(-1.5+i-scrollAmount,-0.5);
+		glVertex2f(-1.5+i-scrollAmount,0.5);
+		glVertex2f(-0.5+i-scrollAmount,0.5);
+		glVertex2f(-0.5+i-scrollAmount,-0.5);
+
+		glEnd();
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		glColor3f(1.0,1.0,1.0);
+	}
+}
+
+void menuHighlight(){
+
+}
+void renderButtons(){
+
+
+}
+
+void displayMainMenu(){
+	renderLevelIcons();
+	menuHighlight();
+	renderButtons();
 }
 
 void saveLevel(){
 
-
+	int testForUsedLevel = 0;
+	for(int i = 0; i < 225; ++i){
+		testForUsedLevel += levels[levelCount][i];
+	}
+	if(!testForUsedLevel) return;
 
 	FILE *fp;
 	char fileString[300];
 	snprintf(fileString, sizeof fileString, "levels/level%d", levelCount);
 	strcat(fileString,".txt");
 	fp = fopen(fileString,"wb");
-	for(int i =0; i <225; ++i){
+	for(int i = 0; i < 225; ++i){
 		int curr = levels[levelCount][i];
 		fprintf(fp, "%d",curr);
 	}
 	fclose(fp);
-	levelCount++;
+	isNewLevel = true;
 	g.levelDevel = false;
 
 
@@ -413,13 +468,15 @@ void display(void)
 	if(g.levelDevel)
 		levelDeveloperDisplay();
 	else if(g.playing)
-		renderGrid(1.0,-1,-1,0);
+		renderGrid(0.85,-0.85,-0.85,playingLevel);
 	else if(g.levelOpenVisual)
 		shaderDisplayOpenVisual();
+	else if(g.mainMenu)
+		displayMainMenu();
 
 
 	/*
-glRotatef(camera.rotateX, 1.0, 0.0, 0.0);
+	glRotatef(camera.rotateX, 1.0, 0.0, 0.0);
 	glRotatef(camera.rotateY, 0.0, 1.0, 0.0);
 
 	glRotatef(-30.0, 0.0, 1.0, 0.0);
@@ -500,10 +557,13 @@ void SpecialInput(int key, int x, int y){
 			if(cursorPos[1] - 1 >= 0) cursorPos[1]--;
 			break;
 		case GLUT_KEY_LEFT:
-			if(cursorPos[0] - 1 >= 0) cursorPos[0]--;
+			if(cursorPos[0] - 1 >= 0&&g.levelDevel) cursorPos[0]--;
+			if(g.mainMenu&&scrollAmount-1>=0) scrollAmount-=1;
 			break;
 		case GLUT_KEY_RIGHT:
-			if(cursorPos[0] + 1 < 15) cursorPos[0]++;
+			if(cursorPos[0] + 1 < 15&&g.levelDevel) cursorPos[0]++;
+			if(g.mainMenu&&scrollAmount+1<levelCount) scrollAmount+=1;
+			
 			break;
 		default:
 			break;
@@ -534,19 +594,26 @@ void keyboard(unsigned char key, int x, int y)
 		case 'a':
 			g.animate = !g.animate;
 			break;
+		case 27:
+			if(g.playing) g.playing = false;
+			
+			if(g.levelDevel) g.levelDevel = false;
+
+			if(g.levelOpenVisual) g.levelOpenVisual = false;
+				
+			g.mainMenu = true;
+			break;
 		case 'p':
-			g.levelDevel = true;
+			if(isNewLevel) {
+				levelCount++;
+				isNewLevel = false;
+			}
+			g.levelDevel = !g.levelDevel;
 			break;
 		case 'w':
-			saveLevel();
+			if(g.levelDevel) saveLevel();
 			break;
 		case 32:
-			printf("Aye got here \n");
-			for (int i = 0; i<32; i++){
-				//if(i%3 == 0){
-					vertices[i] += 0.05;
-				//}
-			}
 			if(g.levelDevel){
 				int pos = cursorPos[1]*15+cursorPos[0];
 				if(levels[levelCount][pos] == 1)
@@ -554,9 +621,11 @@ void keyboard(unsigned char key, int x, int y)
 				else
 					levels[levelCount][pos] = 1;
 			}
-			break;
-		case 27:
-			exit(0);
+			if(g.mainMenu) {
+				playingLevel = scrollAmount+1;
+				g.mainMenu = false;
+				g.levelOpenVisual = true;
+			}
 			break;
 	}
 }
