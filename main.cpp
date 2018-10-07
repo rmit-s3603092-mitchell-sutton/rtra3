@@ -256,7 +256,7 @@ void renderSquare(float size, float x, float y){
 
 void renderCircle(float size, float x, float y){
 		glBegin(GL_POLYGON);
-		for(double i = 0; i < 2 * 3.142; i += 3.142 / 6) //<-- Change this Value
+		for(double i = 0; i < 2 * 3.142; i += 3.142 / 8) //<-- Change this Value
 			glVertex3f(cos(i) * size/15.0+x+0.0666*size, sin(i) * size/15.0+y+0.0666*size, 0.0);
 		glEnd();
 }
