@@ -97,7 +97,7 @@ int editingLevel = 1;
 bool useBufferObjects = false;
 int cursorPos[2] = {0,0};
 Pos ballPos = {0.0,1.0};
-Vel ballVel = {0.0,0.0};
+Vel ballVel = {1.0,1.0};
 Projectile ball1 = {ballPos, ballVel};
 
 float vertices[] = {
@@ -257,7 +257,7 @@ void renderSquare(float size, float x, float y){
 void renderCircle(float size, float x, float y){
 		glBegin(GL_POLYGON);
 		for(double i = 0; i < 2 * 3.142; i += 3.142 / 8) //<-- Change this Value
-			glVertex3f(cos(i) * size/15.0+x+0.0666*size, sin(i) * size/15.0+y+0.0666*size, 0.0);
+			glVertex3f(cos(i) * size/15.0+x, sin(i) * size/15.0+y, 0.0);
 		glEnd();
 }
 
@@ -300,7 +300,7 @@ void renderGrid(float size, float x, float y, int level){
 			renderSquare(size,x+(i%15)/(7.5/size),y+floor(i/15.0)/(7.5/size));
 		}
 		if(levels[level][i]==2){
-			renderCircle(size,x+(i%15)/(7.5/size),y+floor(i/15.0)/(7.5/size));
+			renderCircle(size,x+((i%15)/(7.5/size))+(0.0666*size),y+(floor(i/15.0)/(7.5/size))+(0.0666*size));
 		}
 	}
 
@@ -437,39 +437,70 @@ void levelDeveloperDisplay(){
 	levelDevelHighLight();
 }
 
-void reflectBall(float x1,float y1,float x2,float y2){
+void reflectBall(float x1,float x2,float y1,float y2){
 	
-	float angle = tanh((y2-y1)/(x2-x1));
+	float angle = atan((y1-y2)/(x1-x2));
 	ball1.vel.vx -= 2*cos(angle)*ball1.vel.vx;
-	ball1.vel.vy -= 2*cos(angle)*ball1.vel.vy;
+	ball1.vel.vy += 2*sin(angle)*ball1.vel.vy;
 
+}
+
+bool calcDistConfirmCollision(float size,float x1, float x2, float y1, float y2){
+	if(sqrt((x1-x2)*(x1-x2)
+		       +
+		(y1-y2)*(y1-y2))
+		       < 
+		    size/7.5){
+		reflectBall(x1,x2,y1,y2);
+		return true;
+	}
+	return false;
 }
 
 bool detectSquareColl(int x, int y, float size){
 
-
+	float minX = -0.85+((float)(x))/(7.5/size);
+	float minY = -0.85+((float)(y))/(7.5/size);
+	float maxX = -0.85+((float)(x)+1.0)/(7.5/size);
+	float maxY = -0.85+((float)(y)+1.0)/(7.5/size);
+	float midX = -0.85+((float)(x))/(7.5/size)+0.0666*size;
+	float midY = -0.85+((float)(y))/(7.5/size)+0.0666*size;
+	float balX = ball1.pos.x;
+	float balY = ball1.pos.y;
+	if(balX > maxX){
+		midX = maxX;
+	} else if( balX < minX){
+		midX = minX;
+	}
+	else{
+		midX = balX;
+	}
+	if(balY > maxY){
+		midY = maxY;
+	}else if( balY < minY){
+		midY = minY;
+	}else{
+		midY = balY;
+	}
+	return calcDistConfirmCollision(size/2.0,midX,balX,midY,balY);
 }
 
 bool detectCircleColl(int x, int y, float size){
 
-	int midX = ((float)(x))/(7.5/size)+0.666;
-	int midY = ((float)(y))/(7.5/size)+0.666;
-
-	if(sqrt((midX-ball1.pos.x)*(midX-ball1.pos.x)
-		+
-		(midY-ball1.pos.y)*(midY-ball1.pos.y)) 
-		< 1){
-		reflectBall(midX,midY,ball1.pos.x,ball1.pos.y);
-		return true;
-	}
-
-	return false;
+	float midX = -0.85+((float)(x))/(7.5/size)+0.0666*size;
+	float midY = -0.85+((float)(y))/(7.5/size)+0.0666*size;
+	
+	return calcDistConfirmCollision(size,midX,ball1.pos.x,midY,ball1.pos.y);
 
 
 }
 
 Coord detBallPosition(){
 
+	int x = floor((ball1.pos.x)*7.5/0.85+7+0.15);
+	int y = floor((ball1.pos.y)*7.5/0.85+7+0.15);
+	Coord ball = {x,y};
+	return ball;
 
 }
 
@@ -477,16 +508,29 @@ Coord detectCollision(){
 
 	Coord ball = detBallPosition();
 	Coord coll = {-1,-1};
-	for(int x = ball.x-1; x < ball.x + 1; x++){
-		for(int y = ball.y; y < ball.y -1; y++){
-			if(x>0&&x<16&&y>0){
+	for(int x = ball.x-1; x <= ball.x + 1; x++){
+		for(int y = ball.y-1; y <= ball.y +1; y++){
+			if(x>=0&&x<15&&y>=0&&y<15){
 				if(levels[playingLevel][y*15+x]==1)
-					if(detectSquareColl(x,y,0.85)) coll = {x,y};
-				if(levels[playingLevel][y*15+x]==2)
-					if(detectCircleColl(x,y,0.85)) coll = {x,y};
+					if(detectSquareColl(x,y,0.85)){
+						coll = {x,y};
+						break;
+					}
+				if(levels[playingLevel][y*15+x]==2){
+					if(detectCircleColl(x,y,0.85)){
+						coll = {x,y};
+						break;
+					}
+				
+				}
+					
 			}
 		}
 	}
+	if(coll.x >= 0)
+		levels[playingLevel][coll.y*15+coll.x] = 0;
+	
+	
 }
 
 
@@ -546,6 +590,7 @@ void displayMainMenu(){
 	menuHighlight();
 	renderLevelIcons();
 	renderButtons();
+	
 }
 
 void saveLevel(){
@@ -581,9 +626,17 @@ void renderShadedGridLevel(){
 		renderGrid(0.85,-0.85,-0.85,playingLevel);
 		glUseProgram(0);
 }	
+void renderBall(){
+	
+	renderCircle(0.85,ball1.pos.x,ball1.pos.y);
+
+	
+}
 void renderPlayfield(){
 
-		renderShadedGridLevel();		
+		renderShadedGridLevel();
+		detectCollision();
+		renderBall();
 
 }
 void display(void)
@@ -676,6 +729,12 @@ void motion(int x, int y)
 			break;
 	}
 	
+	glutPostRedisplay();
+}
+void moveBallToMouse(int x, int y){
+
+	ball1.pos.x = -1+((float)(x)/450.0);
+	ball1.pos.y = 1+((float)(y)/(-450.0));
 	glutPostRedisplay();
 }
 
@@ -790,6 +849,7 @@ int main(int argc, char** argv)
 	glutIdleFunc(idle);
 	glutMouseFunc(mouse);
 	glutMotionFunc(motion);
+	glutPassiveMotionFunc(moveBallToMouse);
 	glutSpecialFunc(SpecialInput);
 	glutKeyboardFunc(keyboard);
 	glutMainLoop();
