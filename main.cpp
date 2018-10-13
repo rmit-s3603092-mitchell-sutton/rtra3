@@ -7,6 +7,11 @@
 #define INDICES 4
 #define NUM_BUFFERS 5
 #define SPACEBAR 32
+#define KEY_UP 72
+#define KEY_DOWN 80
+#define KEY_LEFT 75
+#define KEY_RIGHT 77
+#define GRAV 0.91
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -38,7 +43,7 @@
 typedef struct
 {
 	bool animate;
-	float t, lastT;
+	float t, lastT, dt;
 	bool levelOpenVisual;
 	bool levelDevel;
 	bool playing;
@@ -62,7 +67,13 @@ typedef struct
 {
 	Pos pos;
 	Vel vel;
+	bool go;
 } Projectile;
+typedef struct
+{
+	float inc;
+	float deg;
+} Turret;
 typedef enum { inactive, rotate, pan, zoom } CameraControl;
 
 struct camera_t {
@@ -98,150 +109,35 @@ bool useBufferObjects = false;
 int cursorPos[2] = {0,0};
 Pos ballPos = {0.0,1.0};
 Vel ballVel = {1.0,1.0};
-Projectile ball1 = {ballPos, ballVel};
+Projectile ball1 = {ballPos, ballVel, false};
+Turret turret;
 
-float vertices[] = {
-	-1.0, -1.0, -1.0, // 0
-	1.0, -1.0, -1.0, // 1
-	1.0,  1.0, -1.0, // 2
-	-1.0,  1.0, -1.0, // 3
-	-1.0, -1.0,  1.0, // 4
-	1.0, -1.0,  1.0, // 5
-	1.0,  1.0,  1.0, // 6
-	-1.0,  1.0,  1.0  // 7
-};
-
-float colors[] = {
-	0.0, 0.0, 0.0, // 0
-	1.0, 0.0, 0.0, // 1
-	0.0, 1.0, 0.0, // 2
-	0.0, 0.0, 1.0, // 3
-	1.0, 1.0, 0.0, // 4
-	1.0, 0.0, 1.0, // 5
-	0.0, 1.0, 1.0, // 6
-	1.0, 1.0, 1.0, // 7
-};
-
-GLuint indices2DArray[][4] = {
-	{ 4, 5, 6, 7 },  // Front
-	{ 0, 3, 2, 1 },  // Back
-	{ 0, 4, 7, 3 },  // Left
-	{ 1, 2, 6, 5 },  // Right
-	{ 0, 1, 5, 4 },  // Bottom
-	{ 2, 3, 7, 6 }   // Top
-};
-
-GLsizei indicesCounts[] = { 4, 4, 4, 4, 4, 4 };
-
-const GLvoid* indicesOffsets[] = {
-	(GLvoid*)(0),
-	(GLvoid*)(4 * sizeof(GLuint)),
-	(GLvoid*)(8 * sizeof(GLuint)),
-	(GLvoid*)(12 * sizeof(GLuint)),
-	(GLvoid*)(16 * sizeof(GLuint)),
-	(GLvoid*)(20 * sizeof(GLuint)),
-};
-
-GLsizei numQuads = 6;
-
-GLuint buffers[NUM_BUFFERS];
-
-/* *********************** General functions *********************** */
-
-void checkForGLerrors(int lineno)
-{
-	GLenum error;
-	while ((error = glGetError()) != GL_NO_ERROR)
-		printf("%d: %s\n", lineno, gluErrorString(error));
-}
-
-/* *********************** Vertex enables/disables *********************** */
-
-
-void enableVertexArrays(void)
-{
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_COLOR_ARRAY);
-}
-
-void disableVertexArrays(void)
-{
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_COLOR_ARRAY);
-}
-
-/* *********************** Buffer enables/disables *********************** */
-
-void generateBuffers(void)
-{
-	glGenBuffers(NUM_BUFFERS, buffers);
-}
-
-void bufferData()
-{
-	//GL_ARRAY_BUFFER for vertex data
-	/*
-	 void glBufferData( GLenum target, GLsizeiptr size,
-	 const GLvoid *data, GLenum usage)
-	 - target again GL ARRAY BUFFER or GL ELEMENT ARRAY BUFFER
-	 - size is number of bytes
-	 - data is pointer to client memory or NULL
-	 - usage is a hint for performance
-	*/
+/*void updateProjectile(){
 	
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[VERTICES]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	if(ball1.go){
+		ball1.pos.x += ball1.vel.vx * g.dt;
+		ball1.pos.y += g.dt * ball1.vel.vy;
+		ball1.vel.vy += GRAV * g.dt;
+		if(ball1.pos.y < -1){
+			ball1.go = false;
+		}
+	}
 	
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[COLORS]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW);
-	
-	//GL_ELEMENT_ARRAY_BUFFER for index data
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2DArray),
-				 indices2DArray, GL_STATIC_DRAW);
 }
 
-void unBindBuffers()
-{
-	int buffer;
-	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &buffer);
-	if (buffer != 0)
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &buffer);
-	if (buffer != 0)
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-}
-
-
-/* *********************** Rendering VBO *********************** */
-
-
-void renderVBO()
-{
+void drawProjectile(){
 	
-	/*
-	 void glVertexPointer(	GLint size,GLenum type,GLsizei stride,const GLvoid * pointer);
-	 
-	 size = num of vertex per coordinate (only 2 as we doing 2D)
-	 type = Data type of each coordinate (0.0) so float
-	 stride = the amount of data between coordinates. Its tightly packed so I made it 0
-	 pointer = pointer to first coordinate (0);
-	 */
+	if(ball1.go){
+		glPointSize(5.0);
+		glBegin(GL_POINTS);
+		glColor3f(1, 1, 1);
+		glVertex3f(ball1.pos.x, ball1.pos.y, 0);
+		glEnd();
+	}
 	
-	//We could use pointer to print different things using the same array!!
+	
+}*/
 
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[VERTICES]);
-	glVertexPointer(3, GL_FLOAT, 0, 0);
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[COLORS]);
-	glColorPointer(3, GL_FLOAT, 0, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES]);
-
-	glMultiDrawElements(GL_QUADS, indicesCounts, GL_UNSIGNED_INT,
-						indicesOffsets, numQuads);
-}
-
-
-////////////////////* This needs to become VBO! */////////////////////////
 void renderSquare(float size, float x, float y){
 
 	glBegin(GL_POLYGON);
@@ -252,7 +148,7 @@ void renderSquare(float size, float x, float y){
 	glEnd();
 
 }
-//////////////////////////////////////////////////////////////////////////
+
 
 void renderCircle(float size, float x, float y){
 		glBegin(GL_POLYGON);
@@ -310,6 +206,45 @@ void renderGrid(float size, float x, float y, int level){
 }
 
 
+void renderTurret(){
+	
+	glTranslatef(0.0, 1, 0.0);
+	
+	glRotatef(turret.inc, 0.0, 0.0, 1.0);
+	
+	glTranslatef(0.0, -1, 0.0);
+	
+	
+	glBegin(GL_QUADS);
+	glColor4f(252,252,0, 1);
+	
+	glVertex3f(-0.03,1,0);
+	glVertex3f(0.03,1,0);
+	glVertex3f(0.03,0.75,0);
+	glVertex3f(-0.03,0.75,0);
+	
+	glEnd();
+	
+}
+
+void renderTurretBase()
+{
+	float radius = 0.15;
+	float twoPI = 2 * M_PI;
+	
+	glTranslatef(0.0, 1, 0.0);
+	glRotatef(90, 0.0, 0.0, 1.0);
+	glBegin(GL_TRIANGLE_FAN);
+	
+	for (float i = M_PI; i <= twoPI; i += 0.001)
+		glVertex3f(+(sin(i)*radius), (cos(i)*radius), 0);
+	
+	glEnd();
+	glRotatef(-90, 0.0, 0.0, 1.0);
+	glTranslatef(0.0, -1, 0.0);
+}
+
+
 void init(void)
 {
 	glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -319,10 +254,6 @@ void init(void)
 	mainMenuShader = getShader("mainMenu.vs","mainMenu.fs");
 	playingShader = getShader("playing.vs","playing.fs");
 	loadLevels();
-	generateBuffers();
-	enableVertexArrays();
-	bufferData();
-	unBindBuffers();
 	
 	modelViewMatrix = glm::mat4(1.0);
 	normalMatrix = glm::mat3(1.0);
@@ -332,6 +263,7 @@ void init(void)
 	modelViewMatrix = glm::scale(modelViewMatrix, glm::vec3(camera.scale));
 	
 	normalMatrix = glm::transpose(glm::inverse(glm::mat3(modelViewMatrix)));
+
 }
 
 
@@ -635,6 +567,11 @@ void renderBall(){
 void renderPlayfield(){
 
 		renderShadedGridLevel();
+		renderTurretBase();
+		renderTurret();
+		if(ball1.go){
+			//updateProjectile();
+		}
 		detectCollision();
 		renderBall();
 
@@ -669,8 +606,6 @@ void display(void)
 		bufferData();
 		renderVBO();
 	*/
-
-	checkForGLerrors(__LINE__);
 	
 	glutSwapBuffers();
 }
@@ -786,6 +721,29 @@ void keyboard(unsigned char key, int x, int y)
 			break;
 		case 'a':
 			g.animate = !g.animate;
+			break;
+		case 'm':
+			ball1.go = !ball1.go;
+			break;
+		case KEY_LEFT:
+			if(turret.inc<90){
+				turret.inc += 2;
+			}
+			break;
+		case KEY_RIGHT:
+			if(turret.inc>-90){
+				turret.inc -= 2;
+			}
+			break;
+		case 'x':
+			if(turret.inc<90){
+				turret.inc += 2;
+			}
+			break;
+		case 'z':
+			if(turret.inc>-90){
+				turret.inc -= 2;
+			}
 			break;
 		case 27:
 			g.playing = false;
