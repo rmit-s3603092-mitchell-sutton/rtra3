@@ -749,11 +749,23 @@ void SpecialInput(int key, int x, int y){
 			if(cursorPos[0] - 1 >= 0&&g.levelDevel) cursorPos[0]--;
 			if(g.mainMenu&&scrollAmount-1>=0) scrollAmount-=1;
 			oneItemTimer=0;
+			if(g.playing){
+
+				if(turret.inc>270 && turret.inc<452){
+					turret.inc -= 2;
+				}
+			}
 			break;
 		case GLUT_KEY_RIGHT:
 			if(cursorPos[0] + 1 < 15&&g.levelDevel) cursorPos[0]++;
 			if(g.mainMenu&&scrollAmount+1<levelCount) scrollAmount+=1;
 			oneItemTimer=0;
+			if(g.playing){
+								
+				if(turret.inc>268 && turret.inc <450){
+					turret.inc += 2;
+				}
+			}
 			
 			break;
 		default:
@@ -787,16 +799,6 @@ void keyboard(unsigned char key, int x, int y)
 			break;
 		case 'm':
 			ball1.go = !ball1.go;
-			break;
-		case 'z':
-			if(turret.inc>270 && turret.inc<452){
-				turret.inc -= 2;
-			}
-			break;
-		case 'x':
-			if(turret.inc>268 && turret.inc <450){
-				turret.inc += 2;
-			}
 			break;
 		
 		case 27:
@@ -860,10 +862,18 @@ void keyboard(unsigned char key, int x, int y)
 			ball1.go = false;
 			break;
 		case 91:
-			if(editingLevel-1>0) editingLevel--;
+				printf("Pls \n");
+			if(editingLevel-1>0) {
+				editingLevel--;
+			}
+			
 			break;
 		case 93:
-			if(editingLevel+1<=levelCount) editingLevel++;
+			printf("Pls \n");
+			if(editingLevel+1<=levelCount){
+				 editingLevel++;
+			}
+			
 			break;
 	}
 }
