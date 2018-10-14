@@ -97,6 +97,7 @@ typedef struct { float x, y, z; } vec3f;//3D vector
 
 
 Global g = {true, 0.0, 0.0, 0.0, false, false, false, true};
+int numBalls = 8;
 int levels[25][225]= {{0}};
 int newLevel[1][225] = {{0}};
 const float milli = 1000.0;
@@ -506,8 +507,20 @@ Coord detectCollision(){
 			}
 		}
 	}
-	if(coll.x >= 0)
+	if(coll.x >= 0){
 		levels[playingLevel][coll.y*15+coll.x] = 0;
+	}
+	float size = 0.85/15; // This was done in calcs weidly enough
+	   
+
+	if(ball.y-size <= -0.95){
+
+		if ((ball.x >= bucket.pos.x-0.1)&&(ball.x <= bucket.pos.x+0.1)){
+			printf("collision \n");
+		}
+
+	} 
+
 	
 	
 }
