@@ -7,6 +7,11 @@
 #define INDICES 4
 #define NUM_BUFFERS 5
 #define SPACEBAR 32
+#define KEY_UP 72
+#define KEY_DOWN 80
+#define KEY_LEFT 75
+#define KEY_RIGHT 77
+#define GRAV -0.91
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -35,10 +40,12 @@
 #include <glm/gtc/constants.hpp>
 /* *********************** Global Variables *********************** */
 
+//GIT TEST
+
 typedef struct
 {
 	bool animate;
-	float t, lastT;
+	float t, lastT, dt;
 	bool levelOpenVisual;
 	bool levelDevel;
 	bool playing;
@@ -62,7 +69,13 @@ typedef struct
 {
 	Pos pos;
 	Vel vel;
+	bool go;
 } Projectile;
+typedef struct
+{
+	float inc;
+	float deg;
+} Turret;
 typedef enum { inactive, rotate, pan, zoom } CameraControl;
 
 struct camera_t {
@@ -77,7 +90,7 @@ typedef struct { float x, y, z; } vec3f;//3D vector
 
 
 
-Global g = {true, 0.0, 0.0, false, false, false, true};
+Global g = {true, 0.0, 0.0, 0.0, false, false, false, true};
 int levels[25][225]= {{0}};
 int newLevel[1][225] = {{0}};
 const float milli = 1000.0;
@@ -98,167 +111,39 @@ bool useBufferObjects = false;
 int cursorPos[2] = {0,0};
 Pos ballPos = {0.0,1.0};
 Vel ballVel = {1.0,1.0};
-Projectile ball1 = {ballPos, ballVel};
+Projectile ball1 = {ballPos, ballVel, false};
+Turret turret = {360, 0};
 
-float vertices[] = {
-	-1.0, -1.0, -1.0, // 0
-	1.0, -1.0, -1.0, // 1
-	1.0,  1.0, -1.0, // 2
-	-1.0,  1.0, -1.0, // 3
-	-1.0, -1.0,  1.0, // 4
-	1.0, -1.0,  1.0, // 5
-	1.0,  1.0,  1.0, // 6
-	-1.0,  1.0,  1.0  // 7
-};
-
-float colors[] = {
-	0.0, 0.0, 0.0, // 0
-	1.0, 0.0, 0.0, // 1
-	0.0, 1.0, 0.0, // 2
-	0.0, 0.0, 1.0, // 3
-	1.0, 1.0, 0.0, // 4
-	1.0, 0.0, 1.0, // 5
-	0.0, 1.0, 1.0, // 6
-	1.0, 1.0, 1.0, // 7
-};
-
-GLuint indices2DArray[][4] = {
-	{ 4, 5, 6, 7 },  // Front
-	{ 0, 3, 2, 1 },  // Back
-	{ 0, 4, 7, 3 },  // Left
-	{ 1, 2, 6, 5 },  // Right
-	{ 0, 1, 5, 4 },  // Bottom
-	{ 2, 3, 7, 6 }   // Top
-};
-
-GLsizei indicesCounts[] = { 4, 4, 4, 4, 4, 4 };
-
-const GLvoid* indicesOffsets[] = {
-	(GLvoid*)(0),
-	(GLvoid*)(4 * sizeof(GLuint)),
-	(GLvoid*)(8 * sizeof(GLuint)),
-	(GLvoid*)(12 * sizeof(GLuint)),
-	(GLvoid*)(16 * sizeof(GLuint)),
-	(GLvoid*)(20 * sizeof(GLuint)),
-};
-
-GLsizei numQuads = 6;
-
-GLuint buffers[NUM_BUFFERS];
-
-/* *********************** General functions *********************** */
-
-void checkForGLerrors(int lineno)
-{
-	GLenum error;
-	while ((error = glGetError()) != GL_NO_ERROR)
-		printf("%d: %s\n", lineno, gluErrorString(error));
-}
-
-/* *********************** Vertex enables/disables *********************** */
-
-
-void enableVertexArrays(void)
-{
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_COLOR_ARRAY);
-}
-
-void disableVertexArrays(void)
-{
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_COLOR_ARRAY);
-}
-
-/* *********************** Buffer enables/disables *********************** */
-
-void generateBuffers(void)
-{
-	glGenBuffers(NUM_BUFFERS, buffers);
-}
-
-void bufferData()
-{
-	//GL_ARRAY_BUFFER for vertex data
-	/*
-	 void glBufferData( GLenum target, GLsizeiptr size,
-	 const GLvoid *data, GLenum usage)
-	 - target again GL ARRAY BUFFER or GL ELEMENT ARRAY BUFFER
-	 - size is number of bytes
-	 - data is pointer to client memory or NULL
-	 - usage is a hint for performance
-	*/
+void updateProjectile(){
 	
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[VERTICES]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	if(ball1.go){
+		ball1.pos.x += ball1.vel.vx * g.dt;
+		ball1.pos.y += g.dt * ball1.vel.vy;
+		ball1.vel.vy += GRAV * g.dt;
+		if(ball1.pos.y < -1){
+			ball1.go = false;
+		}
+	}
 	
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[COLORS]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW);
-	
-	//GL_ELEMENT_ARRAY_BUFFER for index data
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2DArray),
-				 indices2DArray, GL_STATIC_DRAW);
 }
 
-void unBindBuffers()
-{
-	int buffer;
-	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &buffer);
-	if (buffer != 0)
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &buffer);
-	if (buffer != 0)
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-}
-
-
-/* *********************** Rendering VBO *********************** */
-
-
-void renderVBO()
-{
-	
-	/*
-	 void glVertexPointer(	GLint size,GLenum type,GLsizei stride,const GLvoid * pointer);
-	 
-	 size = num of vertex per coordinate (only 2 as we doing 2D)
-	 type = Data type of each coordinate (0.0) so float
-	 stride = the amount of data between coordinates. Its tightly packed so I made it 0
-	 pointer = pointer to first coordinate (0);
-	 */
-	
-	//We could use pointer to print different things using the same array!!
-
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[VERTICES]);
-	glVertexPointer(3, GL_FLOAT, 0, 0);
-	glBindBuffer(GL_ARRAY_BUFFER, buffers[COLORS]);
-	glColorPointer(3, GL_FLOAT, 0, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[INDICES]);
-
-	glMultiDrawElements(GL_QUADS, indicesCounts, GL_UNSIGNED_INT,
-						indicesOffsets, numQuads);
-}
-
-
-////////////////////* This needs to become VBO! */////////////////////////
 void renderSquare(float size, float x, float y){
-
+	
 	glBegin(GL_POLYGON);
 	glVertex3f(x,y,0.0);
 	glVertex3f(x+size/7.5,y,0.0);
 	glVertex3f(x+size/7.5,y+size/7.5,0.0);
 	glVertex3f(x,y+size/7.5,0.0);
 	glEnd();
-
+	
 }
-//////////////////////////////////////////////////////////////////////////
+
 
 void renderCircle(float size, float x, float y){
-		glBegin(GL_POLYGON);
-		for(double i = 0; i < 2 * 3.142; i += 3.142 / 8) //<-- Change this Value
-			glVertex3f(cos(i) * size/15.0+x, sin(i) * size/15.0+y, 0.0);
-		glEnd();
+	glBegin(GL_POLYGON);
+	for(double i = 0; i < 2 * 3.142; i += 3.142 / 8) //<-- Change this Value
+		glVertex3f(cos(i) * size/15.0+x, sin(i) * size/15.0+y, 0.0);
+	glEnd();
 }
 
 void loadLevels(){
@@ -269,7 +154,7 @@ void loadLevels(){
 		snprintf(fileString, sizeof fileString, "levels/level%d", i);
 		strcat(fileString,".txt");
 		if( access( fileString, F_OK ) != -1 ) {
-		    	FILE *fp;
+			FILE *fp;
 			fp = fopen(fileString,"r");
 			int j = 0;
 			int x;
@@ -280,22 +165,22 @@ void loadLevels(){
 			}
 			levelCount++; i++;
 			printf("level%d\n",levelCount);
- 
+			
 		} else {
 			allowed = false;
 		}
-
 		
-
+		
+		
 	}
-
+	
 }
 
 
 void renderGrid(float size, float x, float y, int level){
-
+	
 	for(int i = 0; i < 225; i++){
-
+		
 		if(levels[level][i]==1){
 			renderSquare(size,x+(i%15)/(7.5/size),y+floor(i/15.0)/(7.5/size));
 		}
@@ -303,10 +188,61 @@ void renderGrid(float size, float x, float y, int level){
 			renderCircle(size,x+((i%15)/(7.5/size))+(0.0666*size),y+(floor(i/15.0)/(7.5/size))+(0.0666*size));
 		}
 	}
+	
+	
+	
+	
+}
+
+
+void renderTurret(){
+	glPushMatrix();
+
+	glTranslatef(0.0, 1, 0.0);
+	
+	glRotatef(turret.inc, 0.0, 0.0, 1.0);
+
+
+	
+	glBegin(GL_QUADS);
+	glColor4f(252,252,0, 1);
+	
+	/*glVertex3f(-0.05,1,0);
+	glVertex3f(0.05,1,0);
+	glVertex3f(0.05,0.75,0);
+	glVertex3f(-0.05,0.75,0);*/
+
+	glVertex3f(-0.05,0,0);
+	glVertex3f(0.05,0,0);
+	glVertex3f(0.05,-0.25,0);
+	glVertex3f(-0.05,-0.25,0);
 
 
 
+	glRotatef(turret.inc, 0.0, 0.0, -1.0);
 
+	glTranslatef(0.0, -1, 0.0);	
+	
+	glEnd();
+	glPopMatrix();
+	
+}
+
+void renderTurretBase()
+{
+	float radius = 0.15;
+	float twoPI = 2 * M_PI;
+	
+	glTranslatef(0.0, 1, 0.0);
+	glRotatef(90, 0.0, 0.0, 1.0);
+	glBegin(GL_TRIANGLE_FAN);
+	
+	for (float i = M_PI; i <= twoPI; i += 0.001)
+		glVertex3f(+(sin(i)*radius), (cos(i)*radius), 0);
+	
+	glEnd();
+	glRotatef(-90, 0.0, 0.0, 1.0);
+	glTranslatef(0.0, -1, 0.0);
 }
 
 
@@ -319,10 +255,6 @@ void init(void)
 	mainMenuShader = getShader("mainMenu.vs","mainMenu.fs");
 	playingShader = getShader("playing.vs","playing.fs");
 	loadLevels();
-	generateBuffers();
-	enableVertexArrays();
-	bufferData();
-	unBindBuffers();
 	
 	modelViewMatrix = glm::mat4(1.0);
 	normalMatrix = glm::mat3(1.0);
@@ -332,6 +264,7 @@ void init(void)
 	modelViewMatrix = glm::scale(modelViewMatrix, glm::vec3(camera.scale));
 	
 	normalMatrix = glm::transpose(glm::inverse(glm::mat3(modelViewMatrix)));
+	
 }
 
 
@@ -341,14 +274,14 @@ void visuallyOpenNewLevel(){
 	glUseProgram(openLevelShader);
 	if(!levelOpenTimer)
 		levelOpenTimer = g.t;
-
-
+	
+	
 	
 	glutSolidSphere(0.8*(g.t - levelOpenTimer),200,200);
-
-
 	
-
+	
+	
+	
 	if(g.t - levelOpenTimer > 3){
 		levelOpenTimer = 0.0;
 		g.levelOpenVisual = false;
@@ -361,22 +294,22 @@ void visuallyOpenNewLevel(){
 void idle()
 {
 	
-	float t, dt;
+	float t;
 	
 	t = glutGet(GLUT_ELAPSED_TIME) / milli;
 	
 	// Accumulate time if animation enabled
 	if (g.animate) {
-		dt = t - g.lastT;
-		g.t += dt;
-		oneItemTimer += dt;
-		playingTimer += dt;
-
+		g.dt = t - g.lastT;
+		g.t += g.dt;
+		oneItemTimer += g.dt;
+		playingTimer += g.dt;
+		
 		g.lastT = t;
 	}
 	
 	glutPostRedisplay();
-
+	
 	
 }
 void shaderDisplayOpenVisual(){
@@ -390,7 +323,7 @@ void shaderDisplayOpenVisual(){
 	glUniform1f(theG,g.t);
 	glUseProgram(0);
 	visuallyOpenNewLevel();
-
+	
 }
 void renderGridLines(){
 	
@@ -400,10 +333,10 @@ void renderGridLines(){
 		glVertex2f(0.85,i/(7.5/0.85)-0.85);
 		glVertex2f(i/(7.5/0.85)-0.85,-0.85);
 		glVertex2f(i/(7.5/0.85)-0.85,0.85);
-
+		
 	}
 	glEnd();
-
+	
 }
 
 
@@ -411,21 +344,21 @@ void levelDevelHighLight(){
 	float x = cursorPos[0];
 	float y = cursorPos[1];
 	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
+	
 	glLineWidth(3);
 	glColor3f(1.0,0.0,0.0);
 	glLineWidth(1.0);
-
+	
 	glBegin(GL_POLYGON);
-
+	
 	glVertex3f(x/(7.5/0.85)-0.85+0.01,y/(7.5/0.85)-0.85+0.01,-0.01);
 	glVertex3f((x+1)/(7.5/0.85)-0.85-0.01, y/(7.5/0.85)-0.85+0.01,-0.01);
 	glVertex3f((x+1)/(7.5/0.85)-0.85-0.01, (y+1)/(7.5/0.85)-0.85-0.01,-0.01);
 	glVertex3f(x/(7.5/0.85)-0.85+0.01, (y+1)/(7.5/0.85)-0.85-0.01,-0.01);
-
+	
 	glEnd();
-
-
+	
+	
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	glColor3f(1.0,1.0,1.0);
 }
@@ -442,15 +375,15 @@ void reflectBall(float x1,float x2,float y1,float y2){
 	float angle = atan((y1-y2)/(x1-x2));
 	ball1.vel.vx -= 2*cos(angle)*ball1.vel.vx;
 	ball1.vel.vy += 2*sin(angle)*ball1.vel.vy;
-
+	
 }
 
 bool calcDistConfirmCollision(float size,float x1, float x2, float y1, float y2){
 	if(sqrt((x1-x2)*(x1-x2)
-		       +
-		(y1-y2)*(y1-y2))
-		       < 
-		    size/7.5){
+			+
+			(y1-y2)*(y1-y2))
+	   <
+	   size/7.5){
 		reflectBall(x1,x2,y1,y2);
 		return true;
 	}
@@ -458,7 +391,7 @@ bool calcDistConfirmCollision(float size,float x1, float x2, float y1, float y2)
 }
 
 bool detectSquareColl(int x, int y, float size){
-
+	
 	float minX = -0.85+((float)(x))/(7.5/size);
 	float minY = -0.85+((float)(y))/(7.5/size);
 	float maxX = -0.85+((float)(x)+1.0)/(7.5/size);
@@ -486,26 +419,26 @@ bool detectSquareColl(int x, int y, float size){
 }
 
 bool detectCircleColl(int x, int y, float size){
-
+	
 	float midX = -0.85+((float)(x))/(7.5/size)+0.0666*size;
 	float midY = -0.85+((float)(y))/(7.5/size)+0.0666*size;
 	
 	return calcDistConfirmCollision(size,midX,ball1.pos.x,midY,ball1.pos.y);
-
-
+	
+	
 }
 
 Coord detBallPosition(){
-
+	
 	int x = floor((ball1.pos.x)*7.5/0.85+7+0.15);
 	int y = floor((ball1.pos.y)*7.5/0.85+7+0.15);
 	Coord ball = {x,y};
 	return ball;
-
+	
 }
 
 Coord detectCollision(){
-
+	
 	Coord ball = detBallPosition();
 	Coord coll = {-1,-1};
 	for(int x = ball.x-1; x <= ball.x + 1; x++){
@@ -521,9 +454,9 @@ Coord detectCollision(){
 						coll = {x,y};
 						break;
 					}
-				
-				}
 					
+				}
+				
 			}
 		}
 	}
@@ -535,55 +468,55 @@ Coord detectCollision(){
 
 
 void renderLevelIcons(){
-
+	
 	glColor3f(1.0,1.0,1.0);
-
+	
 	for(int i = 1; i < levelCount; i++){
 		glLineWidth(3);
 		if(-1.5+i-scrollAmount == -0.5) i++;
 		renderGrid(0.5,(-1.5+i-scrollAmount),-0.5,i);
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		glBegin(GL_POLYGON);
-
+		
 		glVertex2f(-1.5+i-scrollAmount,-0.5);
 		glVertex2f(-1.5+i-scrollAmount,0.5);
 		glVertex2f(-0.5+i-scrollAmount,0.5);
 		glVertex2f(-0.5+i-scrollAmount,-0.5);
-
+		
 		glEnd();
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	}
 }
 
 void menuHighlight(){
-		glUseProgram(mainMenuShader);
-		GLfloat normalMatmen = glGetUniformLocation(mainMenuShader, "normalMatrix");
-		GLfloat modelMatmen = glGetUniformLocation(mainMenuShader, "modelViewMatrix");
-		GLfloat theG = glGetUniformLocation(mainMenuShader, "time");
-		glUniformMatrix3fv(normalMatmen,1,false,&normalMatrix[0][0]);
-		glUniformMatrix4fv(modelMatmen,1,false,&modelViewMatrix[0][0]);
-		glUniform1f(theG,oneItemTimer);
-		glColor3f(1.0,0.0,0.0);
-		renderGrid(0.5,-0.5,-0.5,1+scrollAmount);
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		glBegin(GL_POLYGON);
-
-		glVertex2f(-0.5,-0.5);
-		glVertex2f(-0.5,0.5);
-		glVertex2f(0.5,0.5);
-		glVertex2f(0.5,-0.5);
-		glEnd();
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		glColor3f(1.0,1.0,1.0);
-		glUseProgram(0);
-
+	glUseProgram(mainMenuShader);
+	GLfloat normalMatmen = glGetUniformLocation(mainMenuShader, "normalMatrix");
+	GLfloat modelMatmen = glGetUniformLocation(mainMenuShader, "modelViewMatrix");
+	GLfloat theG = glGetUniformLocation(mainMenuShader, "time");
+	glUniformMatrix3fv(normalMatmen,1,false,&normalMatrix[0][0]);
+	glUniformMatrix4fv(modelMatmen,1,false,&modelViewMatrix[0][0]);
+	glUniform1f(theG,oneItemTimer);
+	glColor3f(1.0,0.0,0.0);
+	renderGrid(0.5,-0.5,-0.5,1+scrollAmount);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	glBegin(GL_POLYGON);
+	
+	glVertex2f(-0.5,-0.5);
+	glVertex2f(-0.5,0.5);
+	glVertex2f(0.5,0.5);
+	glVertex2f(0.5,-0.5);
+	glEnd();
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	glColor3f(1.0,1.0,1.0);
+	glUseProgram(0);
+	
 }
 
 
 
 void renderButtons(){
-
-
+	
+	
 }
 
 void displayMainMenu(){
@@ -594,13 +527,13 @@ void displayMainMenu(){
 }
 
 void saveLevel(){
-
+	
 	int testForUsedLevel = 0;
 	for(int i = 0; i < 225; ++i){
 		testForUsedLevel += levels[editingLevel][i];
 	}
 	if(!testForUsedLevel) return;
-
+	
 	FILE *fp;
 	char fileString[300];
 	snprintf(fileString, sizeof fileString, "levels/level%d", editingLevel);
@@ -613,31 +546,36 @@ void saveLevel(){
 	fclose(fp);
 	if(editingLevel==levelCount)isNewLevel = true;
 	g.levelDevel = false;
-
-
-
+	
+	
+	
 }
 
 void renderShadedGridLevel(){
-		glUseProgram(playingShader);
-		GLfloat theG = glGetUniformLocation(playingShader, "time");
-		glUniform1f(theG,playingTimer);
-		
-		renderGrid(0.85,-0.85,-0.85,playingLevel);
-		glUseProgram(0);
-}	
+	glUseProgram(playingShader);
+	GLfloat theG = glGetUniformLocation(playingShader, "time");
+	glUniform1f(theG,playingTimer);
+	
+	renderGrid(0.85,-0.85,-0.85,playingLevel);
+	glUseProgram(0);
+}
 void renderBall(){
 	
 	renderCircle(0.85,ball1.pos.x,ball1.pos.y);
-
 	
 }
 void renderPlayfield(){
-
-		renderShadedGridLevel();
-		detectCollision();
+	
+	renderShadedGridLevel();
+	renderTurretBase();
+	renderTurret();
+	if(ball1.go){
+		updateProjectile();
 		renderBall();
+	}
+	detectCollision();
 
+	
 }
 void display(void)
 {
@@ -650,7 +588,7 @@ void display(void)
 	glLoadIdentity();
 	
 	/* Oblique view, scale cube */
-		
+	
 	if(g.levelDevel)
 		levelDeveloperDisplay();
 	else if(g.playing)
@@ -661,16 +599,14 @@ void display(void)
 		displayMainMenu();
 	
 	/*
-	glRotatef(camera.rotateX, 1.0, 0.0, 0.0);
-	glRotatef(camera.rotateY, 0.0, 1.0, 0.0);
-
-	glRotatef(-30.0, 0.0, 1.0, 0.0);
-	glScalef(0.5, 0.5, 0.5);
-		bufferData();
-		renderVBO();
-	*/
-
-	checkForGLerrors(__LINE__);
+	 glRotatef(camera.rotateX, 1.0, 0.0, 0.0);
+	 glRotatef(camera.rotateY, 0.0, 1.0, 0.0);
+	 
+	 glRotatef(-30.0, 0.0, 1.0, 0.0);
+	 glScalef(0.5, 0.5, 0.5);
+	 bufferData();
+	 renderVBO();
+	 */
 	
 	glutSwapBuffers();
 }
@@ -732,18 +668,19 @@ void motion(int x, int y)
 	glutPostRedisplay();
 }
 void moveBallToMouse(int x, int y){
-
-	ball1.pos.x = -1+((float)(x)/450.0);
+	
+	/*ball1.pos.x = -1+((float)(x)/450.0);
 	ball1.pos.y = 1+((float)(y)/(-450.0));
 	glutPostRedisplay();
+*/
 }
 
 void SpecialInput(int key, int x, int y){
 	switch(key){
-
+			
 		case GLUT_KEY_UP:
 			if(cursorPos[1] + 1 < 15) cursorPos[1]++;
-			break;	
+			break;
 		case GLUT_KEY_DOWN:
 			if(cursorPos[1] - 1 >= 0) cursorPos[1]--;
 			break;
@@ -761,8 +698,8 @@ void SpecialInput(int key, int x, int y){
 		default:
 			break;
 	}
-glutPostRedisplay();
-
+	glutPostRedisplay();
+	
 }
 
 void keyboard(unsigned char key, int x, int y)
@@ -787,13 +724,27 @@ void keyboard(unsigned char key, int x, int y)
 		case 'a':
 			g.animate = !g.animate;
 			break;
+		case 'm':
+			ball1.go = !ball1.go;
+			break;
+		case 'z':
+			if(turret.inc>270 && turret.inc<452){
+				turret.inc -= 2;
+			}
+			break;
+		case 'x':
+			if(turret.inc>268 && turret.inc <450){
+				turret.inc += 2;
+			}
+			break;
+		
 		case 27:
 			g.playing = false;
 			
 			g.levelDevel = false;
-
+			
 			g.levelOpenVisual = false;
-				
+			
 			oneItemTimer=0;
 			g.mainMenu = true;
 			break;
@@ -823,6 +774,29 @@ void keyboard(unsigned char key, int x, int y)
 				g.mainMenu = false;
 				g.levelOpenVisual = true;
 			}
+			if(g.playing){
+
+				if(!ball1.go){
+					//down set as 360, but we want right to be 360 so minus 90
+					float angle = (turret.inc-90) * (M_PI / 180);
+
+					printf("cos(%f) = %f \n", angle, cos(angle));
+					ball1.pos.x = 0.25 * cos(angle);
+
+					printf("sin(%f) = %f \n", angle, sin(angle));
+					ball1.pos.y = 0.25 * sin(angle) + 1;
+
+					ball1.vel.vx = 1 * cos(angle);
+					ball1.vel.vy = 1 *sin(angle);
+
+					ball1.go = true;
+
+				
+				}
+			}
+			break;
+		case 'v':
+			ball1.go = false;
 			break;
 		case 91:
 			if(editingLevel-1>0) editingLevel--;
@@ -855,3 +829,4 @@ int main(int argc, char** argv)
 	glutMainLoop();
 	return 0;
 }
+
