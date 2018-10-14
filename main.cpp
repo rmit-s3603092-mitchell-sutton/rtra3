@@ -134,6 +134,7 @@ void renderSquare(float size, float x, float y){
 	glVertex3f(x+size/7.5,y,0.0);
 	glVertex3f(x+size/7.5,y+size/7.5,0.0);
 	glVertex3f(x,y+size/7.5,0.0);
+	glVertex3f(x,y,0.0);
 	glEnd();
 	
 }
@@ -373,8 +374,10 @@ void levelDeveloperDisplay(){
 void reflectBall(float x1,float x2,float y1,float y2){
 	
 	float angle = atan((y1-y2)/(x1-x2));
-	ball1.vel.vx -= 2*cos(angle)*ball1.vel.vx;
-	ball1.vel.vy += 2*sin(angle)*ball1.vel.vy;
+	printf("%f: x - %f\n", angle,1.7*cos(angle)*ball1.vel.vx);
+	ball1.vel.vx -= 1.7*cos(angle)*ball1.vel.vx;
+	if(angle<-0.0) angle *= -1;
+	ball1.vel.vy -= 1.7*sin(angle)*ball1.vel.vy;
 	
 }
 
@@ -415,7 +418,7 @@ bool detectSquareColl(int x, int y, float size){
 	}else{
 		midY = balY;
 	}
-	return calcDistConfirmCollision(size/2.0,midX,balX,midY,balY);
+	return calcDistConfirmCollision(size/2.0-0.01,balX,midX,balY,midY);
 }
 
 bool detectCircleColl(int x, int y, float size){
@@ -423,7 +426,7 @@ bool detectCircleColl(int x, int y, float size){
 	float midX = -0.85+((float)(x))/(7.5/size)+0.0666*size;
 	float midY = -0.85+((float)(y))/(7.5/size)+0.0666*size;
 	
-	return calcDistConfirmCollision(size,midX,ball1.pos.x,midY,ball1.pos.y);
+	return calcDistConfirmCollision(size-0.01,midX,ball1.pos.x,midY,ball1.pos.y);
 	
 	
 }
