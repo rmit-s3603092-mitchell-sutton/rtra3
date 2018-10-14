@@ -40,6 +40,8 @@
 #include <glm/gtc/constants.hpp>
 /* *********************** Global Variables *********************** */
 
+//GIT TEST
+
 typedef struct
 {
 	bool animate;
