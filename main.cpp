@@ -76,6 +76,12 @@ typedef struct
 	float inc;
 	float deg;
 } Turret;
+typedef struct
+{
+	Pos pos;
+	Vel vel;
+} Bucket;
+
 typedef enum { inactive, rotate, pan, zoom } CameraControl;
 
 struct camera_t {
@@ -111,8 +117,11 @@ bool useBufferObjects = false;
 int cursorPos[2] = {0,0};
 Pos ballPos = {0.0,1.0};
 Vel ballVel = {1.0,1.0};
+Pos bucketPos = {0.1, -1.0};
+Vel bucketVel = {0.05, 0};
 Projectile ball1 = {ballPos, ballVel, false};
 Turret turret = {360, 0};
+Bucket bucket = {bucketPos, bucketVel};
 
 void updateProjectile(){
 	
@@ -195,6 +204,37 @@ void renderGrid(float size, float x, float y, int level){
 	
 }
 
+void updateBucket(){
+
+	float x = bucket.pos.x;
+	float y = bucket.pos.y;
+	float vx = bucket.vel.vx;
+	float vy = bucket.vel.vy;
+
+	float sinWave = 0.88*sin(g.t);
+
+	bucket.pos.x = sinWave;
+
+}
+
+void renderBucket(){
+	glPushMatrix();
+
+	glBegin(GL_QUADS);
+	glColor4f(252,0,252, 1);
+	
+	glVertex3f(bucket.pos.x-0.1,bucket.pos.y+0.05,0);
+	glVertex3f(bucket.pos.x-0.12,bucket.pos.y,0);
+	glVertex3f(bucket.pos.x+0.12,bucket.pos.y, 0);
+	glVertex3f(bucket.pos.x+0.1,bucket.pos.y+0.05,0);
+	glEnd();
+	glBegin(GL_LINE_LOOP);
+ 	glColor4f(200,0,200, 1);
+	
+	glEnd();
+	glPopMatrix();
+	
+}
 
 void renderTurret(){
 	glPushMatrix();
@@ -236,7 +276,10 @@ void renderTurretBase()
 	
 	glTranslatef(0.0, 1, 0.0);
 	glRotatef(90, 0.0, 0.0, 1.0);
+	glColor4f(252,252,0, 1);
 	glBegin(GL_TRIANGLE_FAN);
+
+
 	
 	for (float i = M_PI; i <= twoPI; i += 0.001)
 		glVertex3f(+(sin(i)*radius), (cos(i)*radius), 0);
@@ -577,6 +620,8 @@ void renderPlayfield(){
 		renderBall();
 	}
 	detectCollision();
+	updateBucket();
+	renderBucket();
 
 	
 }
